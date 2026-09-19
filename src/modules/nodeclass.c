@@ -1,6 +1,9 @@
 /*****************************************************************************\
  *  nodeclass.c - GPFS/Spectrum Scale node class targeting misc module
  *****************************************************************************
+ *  Copyright (C) 2026 Chris Maestas.
+ *  Written by Chris Maestas.
+ *
  *  This file is part of Pdsh, a parallel remote shell program.
  *  For details, see <http://www.llnl.gov/linux/pdsh/>.
  *

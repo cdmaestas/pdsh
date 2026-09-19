@@ -1,6 +1,9 @@
 /*****************************************************************************\
  *  reachable.c - preflight reachability check misc module
  *****************************************************************************
+ *  Copyright (C) 2026 Chris Maestas.
+ *  Written by Chris Maestas.
+ *
  *  This file is part of Pdsh, a parallel remote shell program.
  *  For details, see <http://www.llnl.gov/linux/pdsh/>.
  *
@@ -423,6 +426,7 @@ static void filter_unreachable_hosts(opt_t *opt)
     struct probe        *batch       = Malloc(concurrency * sizeof(*batch));
     char                *host;
     int                  n;
+    int                  i;
 
     do {
         n = 0;
@@ -439,7 +443,7 @@ static void filter_unreachable_hosts(opt_t *opt)
         else
             run_icmp_probe_batch(batch, n);
 
-        for (int i = 0; i < n; i++) {
+        for (i = 0; i < n; i++) {
             if (!batch[i].reachable)
                 hostlist_push_host(unreachable, batch[i].host);
             free(batch[i].host);
