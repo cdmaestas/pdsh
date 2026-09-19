@@ -67,9 +67,22 @@ else
    *-*-hpux*)
      LDFLAGS="$LDFLAGS -Wl,-E"
    ;;
+   *-*-darwin*)
+     # Without this, symbols in a dlopen'd module that collide with a
+     # libSystem export (e.g. err(), errx() - pdsh's own versions have
+     # an incompatible signature from the BSD err(3)/errx(3)) get bound
+     # to libSystem's copy at link time instead of back into the pdsh
+     # executable that loads the module, silently corrupting the call.
+     # -undefined dynamic_lookup alone isn't enough since it only defers
+     # symbols the linker can't resolve at all; -flat_namespace is what
+     # makes dyld search already-loaded images (the executable, loaded
+     # before the module) ahead of libSystem at runtime.
+     MODULE_UNDEFINED_FLAGS="-Wl,-flat_namespace -Wl,-undefined,dynamic_lookup"
+   ;;
    esac
 fi
 AC_SUBST(AIX_PDSH_LDFLAGS)
+AC_SUBST(MODULE_UNDEFINED_FLAGS)
 
 
 # Checks for libraries.
@@ -191,6 +204,13 @@ AM_CONDITIONAL([WITH_DSHGROUP], [test "$ac_with_dshgroup" = "yes"])
 
 AC_NETGROUP
 AM_CONDITIONAL([WITH_NETGROUP], [test "$ac_with_netgroup" = "yes"])
+
+#
+# Determine whether to build the "reachable" module
+# (mmdsh-style preflight ping check, -v / -R equivalent)
+#
+AC_REACHABLE
+AM_CONDITIONAL([WITH_REACHABLE], [test "$ac_have_reachable" = "yes"])
 
 dnl
 dnl check for whether to include readline support

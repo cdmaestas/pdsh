@@ -77,3 +77,11 @@ Module:      misc/netgroup
 Package:     pdsh-mod-netgroup
 Description: Allows list of targets to be build from netgroups.
 Conflicts:   misc/genders, misc/dshgroup, misc/nodeattr
+
+Module:      misc/reachable
+Package:     pdsh-mod-reachable
+Description: Provides -v/-U/-W/-o options for an mmdsh-style preflight
+             reachability check (TCP connect for -R ssh, ping otherwise)
+             that drops unreachable targets before fanout.
+Conflicts:   misc/nodeupdown (both register -v; first loaded wins)
+Requires:    ping(1) on PATH (only used for non-ssh rcmd modules)
