@@ -267,7 +267,7 @@ nodeattr(1) manpage for examples of genders \fBqueries\fR.
 Exclude nodes that match any of the specified genders attributes
 (optionally with values).  This option may be used in combination with any
 other of the node selection options (e.g. \fI-w\fR, \fI-g\fR, \fI-a\fR,
-...). If the installed version of genders supports it, arguments to
+\&...). If the installed version of genders supports it, arguments to
 \fI-X\fR may also take the form of genders \fBqueries\fR. Please see
 documentation for the genders \fI-g\fR option for more information about
 genders \fBqueries\fR.
@@ -317,6 +317,25 @@ whole batch, not each host individually. Requires \fI-v\fR.
 .I "-o port"
 Set the TCP port probed when the active rcmd module is \fBssh\fR
 (default 22). Requires \fI-v\fR.
+
+.SH "nodeclass module options"
+The \fBnodeclass\fR module allows \fBpdsh\fR to target the members of
+one or more IBM Spectrum Scale (GPFS) node classes, mirroring
+mmdsh(8)'s "-N \fInodeclass\fR" targeting. Class membership is read
+from \fBmmlsnodeclass\fR(8); since that membership list isn't
+guaranteed to already be in the form \fBpdsh\fR needs to reach the
+node, each member is additionally resolved against \fBmmlscluster\fR(8)
+to the node's canonical admin node name. This module only builds on a
+system with IBM Spectrum Scale installed (specifically, where
+\fBmmlsnodeclass\fR and \fBmmlscluster\fR can be found via \fIPATH\fR
+or in their default install location, /usr/lpp/mmfs/bin); it is a
+no-op otherwise.
+.TP
+.I "-n class[,class,...]"
+Target list of nodes that are members of the Spectrum Scale node class
+\fIclass\fR. This option may be used multiple times, and/or multiple
+classes may be given in a comma-delimited list, to target the union of
+several node classes.
 
 .SH "slurm module options"
 The \fBslurm\fI module allows \fBpdsh\fR to target nodes based on 

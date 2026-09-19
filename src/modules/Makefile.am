@@ -67,6 +67,10 @@ if WITH_REACHABLE
 REACHABLE_MODULE = reachable.la
 endif
 
+if WITH_NODECLASS
+NODECLASS_MODULE = nodeclass.la
+endif
+
 if WITH_GNU_LD
 VERSION_SCRIPT = \
 	version.map
@@ -98,7 +102,8 @@ pkglib_LTLIBRARIES = \
 	$(DSHGROUP_MODULE) \
 	$(NETGROUP_MODULE) \
 	$(EXEC_MODULE) \
-	$(REACHABLE_MODULE)
+	$(REACHABLE_MODULE) \
+	$(NODECLASS_MODULE)
 
 BUILT_SOURCES = \
 	$(VERSION_SCRIPT)
@@ -123,7 +128,8 @@ EXTRA_libmods_la_SOURCES = \
 	netgroup.c \
 	xcpucmd.c \
 	execcmd.c \
-	reachable.c
+	reachable.c \
+	nodeclass.c
 
 libmods_la_LDFLAGS = \
 	$(MRSH_LIBS) \
@@ -165,6 +171,9 @@ netgroup_la_LDFLAGS =     $(MODULE_FLAGS)
 
 reachable_la_SOURCES =    reachable.c
 reachable_la_LDFLAGS =    $(MODULE_FLAGS)
+
+nodeclass_la_SOURCES =    nodeclass.c
+nodeclass_la_LDFLAGS =    $(MODULE_FLAGS)
 
 $(VERSION_SCRIPT) : 
 	(echo  "{ global:";                \

@@ -212,6 +212,13 @@ AM_CONDITIONAL([WITH_NETGROUP], [test "$ac_with_netgroup" = "yes"])
 AC_REACHABLE
 AM_CONDITIONAL([WITH_REACHABLE], [test "$ac_have_reachable" = "yes"])
 
+#
+# Determine whether to build the "nodeclass" module
+# (mmdsh-style "-N nodeclass" targeting via mmlsnodeclass/mmlscluster)
+#
+AC_NODECLASS
+AM_CONDITIONAL([WITH_NODECLASS], [test "$ac_have_nodeclass" = "yes"])
+
 dnl
 dnl check for whether to include readline support
 dnl

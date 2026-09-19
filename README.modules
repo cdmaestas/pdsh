@@ -85,3 +85,15 @@ Description: Provides -v/-U/-W/-o options for an mmdsh-style preflight
              that drops unreachable targets before fanout.
 Conflicts:   misc/nodeupdown (both register -v; first loaded wins)
 Requires:    ping(1) on PATH (only used for non-ssh rcmd modules)
+
+Module:      misc/nodeclass
+Package:     pdsh-mod-nodeclass
+Description: Provides -n option for mmdsh-style "-N nodeclass" targeting:
+             builds the target list from GPFS/Spectrum Scale node class
+             membership (mmlsnodeclass), resolved to canonical admin
+             node names via mmlscluster.
+Conflicts:   None
+Requires:    IBM Spectrum Scale (GPFS) installed, with mmlsnodeclass and
+             mmlscluster on PATH or in /usr/lpp/mmfs/bin. Only builds on
+             a Spectrum Scale node; configure disables it (with a warning)
+             if either command can't be found.
