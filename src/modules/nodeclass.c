@@ -441,7 +441,7 @@ static void nodeclass_row_cb(struct header_rec *hr, char **values, int nvalues, 
 static List query_nodeclass_members(const char *classes_arg)
 {
     struct members_ctx ctx;
-    char  *argv[] = { MMLSNODECLASS_PATH, "-Y", (char *) classes_arg, NULL };
+    char  *argv[] = { MMLSNODECLASS_PATH, (char *) classes_arg, "-Y", NULL };
     pid_t  pid;
     FILE  *fp = run_capture(argv, &pid);
 
