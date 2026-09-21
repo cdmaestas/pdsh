@@ -263,13 +263,18 @@ static struct header_rec *find_header(List headers, const char *rectype)
 {
     ListIterator i = list_iterator_create(headers);
     struct header_rec *hr;
+    struct header_rec *matched = NULL;
 
     while ((hr = list_next(i))) {
-        if (strcmp(hr->rectype, rectype) == 0)
+        if (hr->rectype && rectype && strcmp(hr->rectype, rectype) == 0) {
+            matched = hr;
             break;
+        }
     }
     list_iterator_destroy(i);
-    return hr;
+    if (!matched && list_count(headers) == 1)
+        matched = list_peek(headers);
+    return matched;
 }
 
 /*
@@ -418,7 +423,11 @@ struct members_ctx {
 static void nodeclass_row_cb(struct header_rec *hr, char **values, int nvalues, void *arg)
 {
     struct members_ctx *ctx = arg;
-    int   idx_members = field_index(hr->names, hr->ncols, "member");
+    int   idx_members = field_index(hr->names, hr->ncols, "allmembers");
+    if (idx_members < 0)
+        idx_members = field_index(hr->names, hr->ncols, "membernodes");
+    if (idx_members < 0)
+        idx_members = field_index(hr->names, hr->ncols, "member");
     List  tokens;
     ListIterator i;
     char *tok;
