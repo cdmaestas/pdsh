@@ -130,7 +130,7 @@ struct pdsh_rcmd_operations nodeclass_rcmd_ops = {
  * Export module options
  */
 struct pdsh_module_option nodeclass_module_options[] =
- { { 'n', "class,...", "target nodes in GPFS/Spectrum Scale node class(es) (mmdsh -N)",
+ { { 'n', "node/class,...", "target nodes in GPFS/Spectrum Scale node class(es) or node ID range(s) (mmdsh -N)",
      DSH | PCP, (optFunc) nodeclass_opt_n
    },
    PDSH_OPT_TABLE_END
@@ -143,7 +143,7 @@ struct pdsh_module pdsh_module_info = {
   "misc",
   "nodeclass",
   "Chris Maestas",
-  "target nodes in a GPFS/Spectrum Scale node class, via mmlsnodeclass/mmlscluster",
+  "target nodes in GPFS/Spectrum Scale node classes or node ID ranges, via mmlsnodeclass/mmlscluster",
   DSH | PCP,
 
   &nodeclass_module_ops,
@@ -412,6 +412,90 @@ static const char *resolve_member(List id_map, const char *token)
     return result;
 }
 
+/*
+ *  Check if a string represents an integer or range like "1-4", "1,2,3", "1..4"
+ */
+static int is_node_id_or_range(const char *str)
+{
+    const char *p = str;
+    int has_digit = 0;
+
+    if (!str || !*str)
+        return 0;
+
+    while (*p) {
+        if (isdigit((unsigned char)*p))
+            has_digit = 1;
+        else if (*p != '-' && *p != ',' && *p != '.')
+            return 0;
+        p++;
+    }
+    return has_digit;
+}
+
+/*
+ *  Expand a node id spec (e.g. "1-4", "1..4", "11,12") using the cluster id_map.
+ *  Returns the number of matching nodes pushed to members list.
+ */
+static int expand_node_id_range(List id_map, const char *spec, List members)
+{
+    char *copy = Strdup(spec);
+    char *p = copy;
+    int count = 0;
+
+    /* Replace ".." with "-" for range parsing compatibility */
+    while ((p = strstr(copy, ".."))) {
+        *p = '-';
+        memmove(p + 1, p + 2, strlen(p + 2) + 1);
+    }
+
+    /* Process comma-separated tokens */
+    p = copy;
+    while (p && *p) {
+        char *next = strchr(p, ',');
+        char *dash;
+        if (next)
+            *next = '\0';
+
+        dash = strchr(p, '-');
+        if (dash) {
+            long start, end, n;
+            *dash = '\0';
+            start = strtol(p, NULL, 10);
+            end = strtol(dash + 1, NULL, 10);
+            if (start > end) {
+                long tmp = start;
+                start = end;
+                end = tmp;
+            }
+            for (n = start; n <= end; n++) {
+                char num_str[32];
+                const char *resolved;
+                snprintf(num_str, sizeof(num_str), "%ld", n);
+                resolved = resolve_member(id_map, num_str);
+                if (resolved) {
+                    list_append(members, Strdup(resolved));
+                    count++;
+                }
+            }
+        } else {
+            const char *resolved = resolve_member(id_map, p);
+            if (resolved) {
+                list_append(members, Strdup(resolved));
+                count++;
+            }
+        }
+
+        if (next)
+            p = next + 1;
+        else
+            break;
+    }
+
+    Free((void **) &copy);
+    return count;
+}
+
 struct members_ctx {
     List members; /* accumulated raw member name strings */
 };
@@ -479,31 +563,58 @@ static hostlist_t mod_nodeclass_wcoll(opt_t *opt)
     hostlist_t wcoll;
     List       id_map;
     List       members;
+    List       class_queries;
     char       classes_arg[LINEBUFSIZE];
     ListIterator i;
+    char      *token;
     char      *member;
 
     if (!class_list || list_is_empty(class_list))
         return NULL;
 
-    if ((size_t) list_join(classes_arg, sizeof(classes_arg), ",", class_list)
-        >= sizeof(classes_arg))
-        errx("%p: nodeclass: class list too long\n");
+    id_map        = build_node_id_map();
+    members       = list_create(free_xstr);
+    class_queries = list_create(free_xstr);
 
-    id_map  = build_node_id_map();
-    members = query_nodeclass_members(classes_arg);
+    i = list_iterator_create(class_list);
+    while ((token = list_next(i))) {
+        if (is_node_id_or_range(token)) {
+            expand_node_id_range(id_map, token, members);
+        } else {
+            list_append(class_queries, Strdup(token));
+        }
+    }
+    list_iterator_destroy(i);
+
+    if (!list_is_empty(class_queries)) {
+        List qmembers;
+        if ((size_t) list_join(classes_arg, sizeof(classes_arg), ",", class_queries)
+            >= sizeof(classes_arg))
+            errx("%p: nodeclass: class list too long\n");
+
+        qmembers = query_nodeclass_members(classes_arg);
+        i = list_iterator_create(qmembers);
+        while ((member = list_next(i))) {
+            const char *resolved = resolve_member(id_map, member);
+            list_append(members, Strdup(resolved ? resolved : member));
+        }
+        list_iterator_destroy(i);
+        list_destroy(qmembers);
+    }
+    list_destroy(class_queries);
 
     if (list_is_empty(members)) {
-        errx("%p: nodeclass: no members found for class(es) \"%s\" - "
-             "check the class name(s) with `mmlsnodeclass'\n", classes_arg);
+        list_join(classes_arg, sizeof(classes_arg), ",", class_list);
+        errx("%p: nodeclass: no members found for node specification(s) \"%s\" - "
+             "check the class name(s) or node id(s) with `mmlsnodeclass' / `mmlscluster'\n",
+             classes_arg);
     }
 
     wcoll = hostlist_create(NULL);
 
     i = list_iterator_create(members);
     while ((member = list_next(i))) {
-        const char *resolved = resolve_member(id_map, member);
-        hostlist_push_host(wcoll, resolved ? resolved : member);
+        hostlist_push_host(wcoll, member);
     }
     list_iterator_destroy(i);
 
