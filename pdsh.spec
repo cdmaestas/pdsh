@@ -14,8 +14,9 @@ Requires: pdsh-rcmd
 #
 # Enabling and disabling pdsh options
 #  defaults:
-#  enabled:  readline, rsh, ssh, dshgroup, netgroups, exec
-#  disabled: rms, mrsh, xcpu, genders, machines, nodeupdown
+#  enabled:  readline, ssh, dshgroup, netgroups, exec, reachable
+#  disabled: rsh, rms, mrsh, xcpu, genders, machines, nodeupdown, nodeclass
+#  (nodeclass requires IBM Spectrum Scale/GPFS; build it with --with nodeclass)
 
 #  To build the various module subpackages, pass --with <pkg> on
 #   the rpmbuild command line (if your rpm is a recent enough version)
@@ -31,7 +32,7 @@ Requires: pdsh-rcmd
 #
 #  Definition of default packages to build on various platforms:
 # 
-%define _defaults ssh exec readline
+%define _defaults ssh exec readline reachable
 
 #   LLNL system defaults
 %if 0%{?chaos}
@@ -84,6 +85,8 @@ Requires: pdsh-rcmd
 %{expand: %pdsh_opt slurm}
 %{expand: %pdsh_opt torque}
 %{expand: %pdsh_opt rms}
+%{expand: %pdsh_opt reachable}
+%{expand: %pdsh_opt nodeclass}
 
 #
 # Other options:
@@ -216,6 +219,23 @@ Requires:  torque
 Pdsh module providing support for gathering the list of target nodes
 from an allocated Torque job.
 
+%package   mod-reachable
+Summary:   Provides mmdsh-style preflight reachability checking for pdsh
+Group:     System Environment/Base
+%description mod-reachable
+Pdsh module providing -v/-U/-W/-o options to probe targets (TCP connect
+for the ssh rcmd module, ping otherwise) and drop unreachable ones
+before fanning out, mirroring IBM Spectrum Scale's mmdsh -v/-R.
+
+%package   mod-nodeclass
+Summary:   Provides IBM Spectrum Scale/GPFS node class targeting for pdsh
+Group:     System Environment/Base
+Requires:  gpfs.base
+%description mod-nodeclass
+Pdsh module providing -n functionality to target nodes by IBM Spectrum
+Scale (GPFS) node class, node number, or node number range, mirroring
+mmdsh's -N nodeclass targeting.
+
 
 
 ##############################################################################
@@ -252,7 +272,11 @@ from an allocated Torque job.
     %{?_with_dshgroups}     \
     %{?_without_dshgroups}  \
     %{?_with_netgroup}      \
-    %{?_without_netgroup} 
+    %{?_without_netgroup}   \
+    %{?_with_reachable}     \
+    %{?_without_reachable}  \
+    %{?_with_nodeclass}     \
+    %{?_without_nodeclass}
     
            
 make %{_smp_mflags} CFLAGS="$RPM_OPT_FLAGS"
@@ -377,6 +401,20 @@ rm -rf "$RPM_BUILD_ROOT"
 %files mod-torque
 %defattr(-,root,root)
 %{_libdir}/pdsh/torque.*
+%endif
+##############################################################################
+
+%if %{?_with_reachable:1}%{!?_with_reachable:0}
+%files mod-reachable
+%defattr(-,root,root)
+%{_libdir}/pdsh/reachable.*
+%endif
+##############################################################################
+
+%if %{?_with_nodeclass:1}%{!?_with_nodeclass:0}
+%files mod-nodeclass
+%defattr(-,root,root)
+%{_libdir}/pdsh/nodeclass.*
 %endif
 ##############################################################################
 
