@@ -86,6 +86,6 @@ Requires:    ping(1), for rcmd modules other than ssh
 
 Module:      misc/nodeclass
 Package:     pdsh-mod-nodeclass
-Description: Provides -n option to target GPFS node classes (mmdsh -N)
+Description: Provides -n option to target GPFS node classes/numbers (mmdsh -N)
 Conflicts:   None
 Requires:    GPFS/Spectrum Scale (mmlsnodeclass, mmlscluster)

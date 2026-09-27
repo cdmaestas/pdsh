@@ -22,34 +22,18 @@
  *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
 \*****************************************************************************
  *
- *  Modeled on IBM Spectrum Scale's mmdsh(8) "-N nodeclass" targeting:
- *  build the working collective from the members of one or more GPFS
- *  node classes (as reported by mmlsnodeclass(8)), resolved through
- *  mmlscluster(8) to the canonical admin node name pdsh should target,
- *  since mmlsnodeclass's member list isn't guaranteed to already be in
- *  the form (admin vs. daemon interface name, or a bare node number)
- *  that pdsh needs to actually reach the node.
+ *  Modeled on IBM Spectrum Scale's mmdsh(8) "-N" targeting: build the
+ *  working collective from GPFS node classes and/or node numbers.
+ *  Class membership comes from the allMembers column of
+ *  "mmlsnodeclass <classes> -Y" (which includes members of nested
+ *  classes), and every target is resolved to its admin node name
+ *  through the clusterNode records of "mmlscluster -Y".
  *
- *  Both commands are shelled out to and parsed via their "-Y" (colon
- *  delimited, self-describing header) output rather than the default
- *  human-readable tables, since column widths in the latter aren't
- *  stable across versions.
- *
- *  SCAFFOLD STATUS: the exact "-Y" column names below (nodeClassName,
- *  members, nodeNumber, adminNodeName, daemonNodeName) are inferred
- *  from IBM's command reference prose, not a captured sample of real
- *  output - this has not been run against an actual GPFS/Spectrum
- *  Scale cluster. The column lookup is name-based and case/substring
- *  tolerant specifically to survive minor naming drift, but the field
- *  names themselves need to be confirmed (and this module exercised
- *  end to end) on real hardware before relying on it. Known gaps:
- *    - "-Y" is documented to encode field values that would otherwise
- *      contain a literal colon (via mmclidecode); this parser does not
- *      decode that escaping.
- *    - node ID/name resolution is a simple linear scan over the
- *      cluster's node list per member - fine for typical cluster
- *      sizes, but a hash lookup would scale better on very large
- *      clusters.
+ *  Both commands are parsed from their -Y output (colon-delimited, with
+ *  a HEADER row naming each column), looking columns up by name rather
+ *  than position. -Y encodes values that contain a colon (mmclidecode);
+ *  that encoding isn't decoded here, since the node and class names
+ *  and node numbers read don't normally contain one.
 \*****************************************************************************/
 #if HAVE_CONFIG_H
 #  include "config.h"
@@ -61,7 +45,6 @@
 #include <strings.h>
 #include <ctype.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -131,7 +114,8 @@ struct pdsh_rcmd_operations nodeclass_rcmd_ops = {
  * Export module options
  */
 struct pdsh_module_option nodeclass_module_options[] =
- { { 'n', "node/class,...", "target nodes in GPFS/Spectrum Scale node class(es) or node ID range(s) (mmdsh -N)",
+ { { 'n', "node/class,...",
+     "target GPFS node classes or node numbers/ranges (mmdsh -N)",
      DSH | PCP, (optFunc) nodeclass_opt_n
    },
    PDSH_OPT_TABLE_END
@@ -144,7 +128,7 @@ struct pdsh_module pdsh_module_info = {
   "misc",
   "nodeclass",
   "Chris Maestas",
-  "target nodes in GPFS/Spectrum Scale node classes or node ID ranges, via mmlsnodeclass/mmlscluster",
+  "target GPFS/Spectrum Scale node classes or node numbers",
   DSH | PCP,
 
   &nodeclass_module_ops,
@@ -167,8 +151,9 @@ static int mod_nodeclass_exit(void)
 
 /*
  *  Fork `argv[0]' with `argv' and hand back a FILE* reading its stdout;
- *    `*pid_out' is the child to reap with waitpid() once done reading.
- *    Returns NULL on failure to fork/pipe/exec.
+ *    stderr is left alone so the command's own error messages reach the
+ *    user. `*pid_out' is the child to reap with finish_capture().
+ *    Returns NULL if the pipe or fork fails.
  */
 static FILE *run_capture(char *const argv[], pid_t *pid_out)
 {
@@ -189,11 +174,8 @@ static FILE *run_capture(char *const argv[], pid_t *pid_out)
     }
 
     if (pid == 0) {
-        int devnull = open("/dev/null", O_WRONLY);
         close(pipefd[0]);
         dup2(pipefd[1], STDOUT_FILENO);
-        if (devnull >= 0)
-            dup2(devnull, STDERR_FILENO);
         close(pipefd[1]);
         execv(argv[0], argv);
         _exit(127);
@@ -202,6 +184,20 @@ static FILE *run_capture(char *const argv[], pid_t *pid_out)
     close(pipefd[1]);
     *pid_out = pid;
     return fdopen(pipefd[0], "r");
+}
+
+/*
+ *  Close the stream from run_capture() and reap its child.
+ *    Returns 0 if the command exited successfully, -1 otherwise.
+ */
+static int finish_capture(FILE *fp, pid_t pid)
+{
+    int status;
+
+    fclose(fp);
+    if (waitpid(pid, &status, 0) < 0)
+        return -1;
+    return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
 }
 
 /*
@@ -214,6 +210,7 @@ static int split_colon(char *line, char *fields[], int max)
 {
     int   n = 0;
     char *p = line;
+    char *colon;
     size_t len = strlen(p);
 
     if (len > 0 && p[len - 1] == '\n')
@@ -221,7 +218,7 @@ static int split_colon(char *line, char *fields[], int max)
 
     while (n < max) {
         fields[n++] = p;
-        char *colon = strchr(p, ':');
+        colon = strchr(p, ':');
         if (!colon)
             break;
         *colon = '\0';
@@ -230,11 +227,26 @@ static int split_colon(char *line, char *fields[], int max)
     return n;
 }
 
+/*
+ *  Case-insensitive substring test. strcasestr(3) would do, but it is a
+ *    GNU extension that glibc only declares under _GNU_SOURCE.
+ */
+static int contains_nocase(const char *str, const char *substr)
+{
+    size_t len = strlen(substr);
+
+    for (; *str; str++) {
+        if (strncasecmp(str, substr, len) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 static int field_index(char **names, int n, const char *substr)
 {
     int i;
     for (i = 0; i < n; i++) {
-        if (names[i] && strcasestr(names[i], substr))
+        if (names[i] && contains_nocase(names[i], substr))
             return i;
     }
     return -1;
@@ -284,7 +296,8 @@ static struct header_rec *find_header(List headers, const char *rectype)
  *    where `hr' is that row's record type's header (so the callback
  *    can look up columns by name via field_index()).
  */
-typedef void (*YRowF)(struct header_rec *hr, char **values, int nvalues, void *arg);
+typedef void (*YRowF)(struct header_rec *hr, char **values, int nvalues,
+                      void *arg);
 
 static void parse_y_output(FILE *fp, YRowF row_cb, void *arg)
 {
@@ -322,9 +335,13 @@ static void parse_y_output(FILE *fp, YRowF row_cb, void *arg)
 
 /*
  *  mmlscluster -Y row callback: collect node number / admin / daemon
- *    name triples into the List passed as `arg'.
+ *    name triples into the List passed as `arg'. Only records with an
+ *    admin name column count; mmlscluster also emits other per-node
+ *    records (e.g. commentNode) that carry a node number but no admin
+ *    name.
  */
-static void cluster_row_cb(struct header_rec *hr, char **values, int nvalues, void *arg)
+static void cluster_row_cb(struct header_rec *hr, char **values,
+                           int nvalues, void *arg)
 {
     List id_map = arg;
     int  idx_number = field_index(hr->names, hr->ncols, "nodenumber");
@@ -332,15 +349,15 @@ static void cluster_row_cb(struct header_rec *hr, char **values, int nvalues, vo
     int  idx_daemon = field_index(hr->names, hr->ncols, "daemonnodename");
     struct node_entry *e;
 
-    if (idx_number < 0 || idx_number >= nvalues)
-        return; /* not the node-listing record type */
+    if (idx_number < 0 || idx_number >= nvalues
+        || idx_admin < 0 || idx_admin >= nvalues)
+        return;
 
     e = Malloc(sizeof(*e));
     e->number = Strdup(values[idx_number]);
-    e->admin  = (idx_admin  >= 0 && idx_admin  < nvalues && *values[idx_admin])
-                ? Strdup(values[idx_admin]) : NULL;
-    e->daemon = (idx_daemon >= 0 && idx_daemon < nvalues && *values[idx_daemon])
-                ? Strdup(values[idx_daemon]) : NULL;
+    e->admin  = *values[idx_admin] ? Strdup(values[idx_admin]) : NULL;
+    e->daemon = (idx_daemon >= 0 && idx_daemon < nvalues
+                 && *values[idx_daemon]) ? Strdup(values[idx_daemon]) : NULL;
 
     list_append(id_map, e);
 }
@@ -362,11 +379,10 @@ static void free_node_entry(void *x)
 }
 
 /*
- *  Run mmlscluster -Y and return the resulting List of node_entry, or
- *    an empty (non-NULL) List if the command can't be run - name
- *    resolution just falls back to using mmlsnodeclass's member names
- *    as-is in that case, since it's a best-effort refinement, not a
- *    hard requirement (see resolve_member()).
+ *  Run mmlscluster -Y and return the resulting List of node_entry. If
+ *    the command fails, warn and return what was read (possibly an
+ *    empty List): class members are then used unresolved, and node
+ *    numbers can't be resolved at all (see resolve_member()).
  */
 static List build_node_id_map(void)
 {
@@ -375,17 +391,14 @@ static List build_node_id_map(void)
     pid_t  pid;
     FILE  *fp = run_capture(argv, &pid);
 
-    if (!fp) {
-        err("%p: nodeclass: unable to run %s; node names from mmlsnodeclass "
-            "will be used unresolved\n", MMLSCLUSTER_PATH);
-        return id_map;
+    if (fp) {
+        parse_y_output(fp, cluster_row_cb, id_map);
+        if (finish_capture(fp, pid) == 0)
+            return id_map;
     }
 
-    parse_y_output(fp, cluster_row_cb, id_map);
-
-    fclose(fp);
-    waitpid(pid, NULL, 0);
-
+    err("%p: nodeclass: %s failed; node names will not be resolved\n",
+        MMLSCLUSTER_PATH);
     return id_map;
 }
 
@@ -414,7 +427,8 @@ static const char *resolve_member(List id_map, const char *token)
 }
 
 /*
- *  Check if a string represents an integer or range like "1-4", "1,2,3", "1..4"
+ *  Check if a string looks like a node number or range ("3", "1-4",
+ *    "1..4") rather than a node class name.
  */
 static int is_node_id_or_range(const char *str)
 {
@@ -435,66 +449,82 @@ static int is_node_id_or_range(const char *str)
 }
 
 /*
- *  Expand a node id spec (e.g. "1-4", "1..4", "11,12") using the cluster id_map.
- *  Returns the number of matching nodes pushed to members list.
+ *  Parse a node number or range ("3", "1-4") into [*lo, *hi].
+ *    Returns 0 on success, -1 if `str' isn't one of those forms.
  */
-static int expand_node_id_range(List id_map, const char *spec, List members)
+static int parse_node_range(const char *str, long *lo, long *hi)
+{
+    char *end;
+
+    *lo = *hi = 0;
+    if (!isdigit((unsigned char) *str))
+        return -1;
+    *lo = *hi = strtol(str, &end, 10);
+    if (*end == '-') {
+        str = end + 1;
+        if (!isdigit((unsigned char) *str))
+            return -1;
+        *hi = strtol(str, &end, 10);
+    }
+    if (*end != '\0')
+        return -1;
+    if (*lo > *hi) {
+        long tmp = *lo;
+        *lo = *hi;
+        *hi = tmp;
+    }
+    return 0;
+}
+
+/*
+ *  Append the admin name of every cluster node whose number falls in
+ *    the node spec (e.g. "1-4", "1..4", "11,12") to members. Walks the
+ *    cluster's node list rather than the range itself, so a huge range
+ *    costs no more than the cluster size, and gaps in the numbering are
+ *    skipped. Exits with an error if the spec is malformed, or if any
+ *    part of it matches no node.
+ */
+static void expand_node_id_range(List id_map, const char *spec, List members)
 {
     char *copy = Strdup(spec);
     char *p = copy;
-    int count = 0;
+    char *next;
+    char *end;
+    long lo, hi, num;
+    int matched;
+    ListIterator i;
+    struct node_entry *e;
 
-    /* Replace ".." with "-" for range parsing compatibility */
+    /* Accept "1..4" as a synonym for "1-4" */
     while ((p = strstr(copy, ".."))) {
         *p = '-';
         memmove(p + 1, p + 2, strlen(p + 2) + 1);
     }
 
-    /* Process comma-separated tokens */
-    p = copy;
-    while (p && *p) {
-        char *next = strchr(p, ',');
-        char *dash;
-        if (next)
-            *next = '\0';
+    for (p = copy; p; p = next) {
+        if ((next = strchr(p, ',')))
+            *next++ = '\0';
 
-        dash = strchr(p, '-');
-        if (dash) {
-            long start, end, n;
-            *dash = '\0';
-            start = strtol(p, NULL, 10);
-            end = strtol(dash + 1, NULL, 10);
-            if (start > end) {
-                long tmp = start;
-                start = end;
-                end = tmp;
-            }
-            for (n = start; n <= end; n++) {
-                char num_str[32];
-                const char *resolved;
-                snprintf(num_str, sizeof(num_str), "%ld", n);
-                resolved = resolve_member(id_map, num_str);
-                if (resolved) {
-                    list_append(members, Strdup(resolved));
-                    count++;
-                }
-            }
-        } else {
-            const char *resolved = resolve_member(id_map, p);
-            if (resolved) {
-                list_append(members, Strdup(resolved));
-                count++;
+        if (parse_node_range(p, &lo, &hi) < 0)
+            errx("%p: nodeclass: invalid node number or range \"%s\"\n",
+                 spec);
+
+        matched = 0;
+        i = list_iterator_create(id_map);
+        while ((e = list_next(i))) {
+            num = strtol(e->number, &end, 10);
+            if (*end == '\0' && num >= lo && num <= hi && e->admin) {
+                list_append(members, Strdup(e->admin));
+                matched++;
             }
         }
+        list_iterator_destroy(i);
 
-        if (next)
-            p = next + 1;
-        else
-            break;
+        if (!matched)
+            errx("%p: nodeclass: no cluster node matches \"%s\"\n", spec);
     }
 
     Free((void **) &copy);
-    return count;
 }
 
 struct members_ctx {
@@ -502,20 +532,26 @@ struct members_ctx {
 };
 
 /*
- *  mmlsnodeclass -Y row callback: split the "members" column on comma
- *    and append each token to the members list.
+ *  mmlsnodeclass -Y row callback: split the allMembers column (falling
+ *    back to memberNodes) on comma and append each node name to the
+ *    members list. The search must not settle for a bare "member"
+ *    match first: memberClasses, which comes earlier, lists nested
+ *    class names, not nodes.
  */
-static void nodeclass_row_cb(struct header_rec *hr, char **values, int nvalues, void *arg)
+static void nodeclass_row_cb(struct header_rec *hr, char **values,
+                             int nvalues, void *arg)
 {
     struct members_ctx *ctx = arg;
-    int   idx_members = field_index(hr->names, hr->ncols, "allmembers");
+    int   idx_members;
+    List  tokens;
+    ListIterator i;
+    char *tok;
+
+    idx_members = field_index(hr->names, hr->ncols, "allmembers");
     if (idx_members < 0)
         idx_members = field_index(hr->names, hr->ncols, "membernodes");
     if (idx_members < 0)
         idx_members = field_index(hr->names, hr->ncols, "member");
-    List  tokens;
-    ListIterator i;
-    char *tok;
 
     if (idx_members < 0 || idx_members >= nvalues || !*values[idx_members])
         return;
@@ -529,8 +565,10 @@ static void nodeclass_row_cb(struct header_rec *hr, char **values, int nvalues, 
 }
 
 /*
- *  Run "mmlsnodeclass -Y <classes>" for the comma-joined class_list and
- *    return the raw (unresolved) member name List.
+ *  Run "mmlsnodeclass <classes> -Y" and return the raw (unresolved)
+ *    member name List. Exits with an error if the command fails, which
+ *    it does if any one of the named classes doesn't exist - even
+ *    though it still prints the members of the classes that do.
  */
 static List query_nodeclass_members(const char *classes_arg)
 {
@@ -541,15 +579,11 @@ static List query_nodeclass_members(const char *classes_arg)
 
     ctx.members = list_create(free_xstr);
 
-    if (!fp) {
-        errx("%p: nodeclass: unable to run %s\n", MMLSNODECLASS_PATH);
-        return ctx.members; /* unreached - errx() exits */
-    }
-
-    parse_y_output(fp, nodeclass_row_cb, &ctx);
-
-    fclose(fp);
-    waitpid(pid, NULL, 0);
+    if (fp)
+        parse_y_output(fp, nodeclass_row_cb, &ctx);
+    if (!fp || finish_capture(fp, pid) < 0)
+        errx("%p: nodeclass: %s failed for \"%s\"\n",
+             MMLSNODECLASS_PATH, classes_arg);
 
     return ctx.members;
 }
@@ -557,7 +591,7 @@ static List query_nodeclass_members(const char *classes_arg)
 /*
  *  Called by mod_read_wcoll() to build (part of) the initial working
  *    collective. Returns NULL if -n was never given, so this module is
- *    a no-op unless explicitly asked for one or more node classes.
+ *    a no-op unless explicitly asked for node classes or numbers.
  */
 static hostlist_t mod_nodeclass_wcoll(opt_t *opt)
 {
@@ -589,8 +623,8 @@ static hostlist_t mod_nodeclass_wcoll(opt_t *opt)
 
     if (!list_is_empty(class_queries)) {
         List qmembers;
-        if ((size_t) list_join(classes_arg, sizeof(classes_arg), ",", class_queries)
-            >= sizeof(classes_arg))
+        if ((size_t) list_join(classes_arg, sizeof(classes_arg), ",",
+                               class_queries) >= sizeof(classes_arg))
             errx("%p: nodeclass: class list too long\n");
 
         qmembers = query_nodeclass_members(classes_arg);
@@ -606,18 +640,16 @@ static hostlist_t mod_nodeclass_wcoll(opt_t *opt)
 
     if (list_is_empty(members)) {
         list_join(classes_arg, sizeof(classes_arg), ",", class_list);
-        errx("%p: nodeclass: no members found for node specification(s) \"%s\" - "
-             "check the class name(s) or node id(s) with `mmlsnodeclass' / `mmlscluster'\n",
-             classes_arg);
+        errx("%p: nodeclass: no nodes found for \"%s\"\n", classes_arg);
     }
 
     wcoll = hostlist_create(NULL);
 
     i = list_iterator_create(members);
-    while ((member = list_next(i))) {
+    while ((member = list_next(i)))
         hostlist_push_host(wcoll, member);
-    }
     list_iterator_destroy(i);
+    hostlist_uniq(wcoll);
 
     list_destroy(members);
     list_destroy(id_map);

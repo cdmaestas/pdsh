@@ -315,22 +315,20 @@ Set the TCP port probed for the \fBssh\fR rcmd module (default 22).
 Requires \fI-v\fR.
 
 .SH "nodeclass module options"
-The \fBnodeclass\fR module allows \fBpdsh\fR to target the members of
-one or more IBM Spectrum Scale (GPFS) node classes or node ID ranges, mirroring
-mmdsh(8)'s "-N \fInodespec\fR" targeting. Class membership is read
-from \fBmmlsnodeclass\fR(8); node IDs, ranges, and class members are
-resolved against \fBmmlscluster\fR(8)
-to each node's canonical admin node name. This module only builds on a
-system with IBM Spectrum Scale installed (specifically, where
-\fBmmlsnodeclass\fR and \fBmmlscluster\fR can be found via \fIPATH\fR
-or in their default install location, /usr/lpp/mmfs/bin); it is a
-no-op otherwise.
+The \fBnodeclass\fR module allows \fBpdsh\fR to target IBM Spectrum
+Scale (GPFS) nodes by node class or node number, similar to mmdsh(8)'s
+\fI-N\fR option. Class membership is read from \fBmmlsnodeclass\fR(8),
+and every target is resolved to its admin node name through
+\fBmmlscluster\fR(8). The module is only built where both commands are
+available.
 .TP
 .I "-n node/class[,node/class,...]"
-Target list of nodes specified by Spectrum Scale node class names,
-individual node numbers (e.g. \fB-n 1\fR), node number ranges
-(e.g. \fB-n 1-4\fR or \fB-n 1..4\fR), or comma-separated combinations.
-This option may be used multiple times and/or combined with comma-separated arguments.
+Target the nodes in Spectrum Scale node class \fIclass\fR, node number
+\fInode\fR (e.g. \fB-n 1\fR), or range of node numbers (e.g.
+\fB-n 1-4\fR or \fB-n 1..4\fR). This option may be used more than
+once, and entries may be combined in a comma-separated list; each node
+is targeted once. It is an error for any class not to exist, or for any
+node number or range to match no node in the cluster.
 
 .SH "slurm module options"
 The \fBslurm\fI module allows \fBpdsh\fR to target nodes based on 
