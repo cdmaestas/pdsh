@@ -63,6 +63,10 @@ if WITH_EXEC
 EXEC_MODULE = execcmd.la
 endif
 
+if WITH_REACHABLE
+REACHABLE_MODULE = reachable.la
+endif
+
 if WITH_GNU_LD
 VERSION_SCRIPT = \
 	version.map
@@ -93,7 +97,8 @@ pkglib_LTLIBRARIES = \
 	$(TORQUE_MODULE) \
 	$(DSHGROUP_MODULE) \
 	$(NETGROUP_MODULE) \
-	$(EXEC_MODULE)
+	$(EXEC_MODULE) \
+	$(REACHABLE_MODULE)
 
 BUILT_SOURCES = \
 	$(VERSION_SCRIPT)
@@ -117,7 +122,8 @@ EXTRA_libmods_la_SOURCES = \
 	dshgroup.c \
 	netgroup.c \
 	xcpucmd.c \
-	execcmd.c 
+	execcmd.c \
+	reachable.c
 
 libmods_la_LDFLAGS = \
 	$(MRSH_LIBS) \
@@ -156,6 +162,8 @@ dshgroup_la_SOURCES =     dshgroup.c
 dshgroup_la_LDFLAGS =     $(MODULE_FLAGS) 
 netgroup_la_SOURCES =     netgroup.c 
 netgroup_la_LDFLAGS =     $(MODULE_FLAGS) 
+reachable_la_SOURCES =    reachable.c
+reachable_la_LDFLAGS =    $(MODULE_FLAGS)
 
 $(VERSION_SCRIPT) : 
 	(echo  "{ global:";                \

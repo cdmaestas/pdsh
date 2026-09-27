@@ -54,7 +54,7 @@ Requires:    libgenders
 Module:      misc/nodeupdown
 Package:     pdsh-mod-nodeupdown
 Description: Provides -v option using nodeupdown library
-Conflicts:   None
+Conflicts:   misc/reachable
 Requires:    libnodeupdown
 
 Module:      misc/machines
@@ -77,3 +77,9 @@ Module:      misc/netgroup
 Package:     pdsh-mod-netgroup
 Description: Allows list of targets to be build from netgroups.
 Conflicts:   misc/genders, misc/dshgroup, misc/nodeattr
+
+Module:      misc/reachable
+Package:     pdsh-mod-reachable
+Description: Provides -v,-U,-W,-o options to drop unreachable targets (mmdsh -v)
+Conflicts:   misc/nodeupdown
+Requires:    ping(1), for rcmd modules other than ssh
