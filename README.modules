@@ -83,3 +83,9 @@ Package:     pdsh-mod-reachable
 Description: Provides -v,-U,-W,-o options to drop unreachable targets (mmdsh -v)
 Conflicts:   misc/nodeupdown
 Requires:    ping(1), for rcmd modules other than ssh
+
+Module:      misc/nodeclass
+Package:     pdsh-mod-nodeclass
+Description: Provides -n option to target GPFS node classes (mmdsh -N)
+Conflicts:   None
+Requires:    GPFS/Spectrum Scale (mmlsnodeclass, mmlscluster)
