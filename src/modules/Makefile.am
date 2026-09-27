@@ -99,7 +99,7 @@ BUILT_SOURCES = \
 	$(VERSION_SCRIPT)
 
 MODULE_FLAGS = \
-	-module -avoid-version $(OTHER_FLAGS)
+	-module -avoid-version $(OTHER_FLAGS) $(MODULE_UNDEFINED_FLAGS)
 endif
 
 nodist_libmods_la_SOURCES = \

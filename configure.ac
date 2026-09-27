@@ -67,9 +67,15 @@ else
    *-*-hpux*)
      LDFLAGS="$LDFLAGS -Wl,-E"
    ;;
+   *-*-darwin*)
+     # Resolve module symbols against pdsh itself, not libSystem, whose
+     # BSD err(3)/errx(3) would otherwise shadow pdsh's err()/errx().
+     MODULE_UNDEFINED_FLAGS="-Wl,-flat_namespace -Wl,-undefined,dynamic_lookup"
+   ;;
    esac
 fi
 AC_SUBST(AIX_PDSH_LDFLAGS)
+AC_SUBST(MODULE_UNDEFINED_FLAGS)
 
 
 # Checks for libraries.
