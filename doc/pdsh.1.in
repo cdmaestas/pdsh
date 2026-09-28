@@ -314,6 +314,22 @@ Requires \fI-v\fR.
 Set the TCP port probed for the \fBssh\fR rcmd module (default 22).
 Requires \fI-v\fR.
 
+.SH "nodeclass module options"
+The \fBnodeclass\fR module allows \fBpdsh\fR to target IBM Spectrum
+Scale (GPFS) nodes by node class or node number, similar to mmdsh(8)'s
+\fI-N\fR option. Class membership is read from \fBmmlsnodeclass\fR(8),
+and every target is resolved to its admin node name through
+\fBmmlscluster\fR(8). The module is only built where both commands are
+available.
+.TP
+.I "-n node/class[,node/class,...]"
+Target the nodes in Spectrum Scale node class \fIclass\fR, node number
+\fInode\fR (e.g. \fB-n 1\fR), or range of node numbers (e.g.
+\fB-n 1-4\fR or \fB-n 1..4\fR). This option may be used more than
+once, and entries may be combined in a comma-separated list; each node
+is targeted once. It is an error for any class not to exist, or for any
+node number or range to match no node in the cluster.
+
 .SH "slurm module options"
 The \fBslurm\fI module allows \fBpdsh\fR to target nodes based on 
 currently running SLURM jobs. The \fBslurm\fR module is typically
