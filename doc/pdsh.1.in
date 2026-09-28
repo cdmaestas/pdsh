@@ -288,6 +288,32 @@ environment variable.
 .I "-v"
 Eliminate target nodes that are considered "down" by libnodeupdown.
 
+.SH "reachable module options"
+The \fBreachable\fR module probes each target before \fBpdsh\fR runs
+a command and drops any that don't answer, similar to mmdsh(8)'s
+\fI-v\fR option. It also provides \fI-v\fR, so it cannot be loaded
+together with the \fBnodeupdown\fR module.
+.TP
+.I "-v"
+Exclude targets that don't answer a preflight probe. With the \fBssh\fR
+rcmd module the probe is a TCP connect to the ssh port, since ICMP is
+often filtered where ssh is not; with other rcmd modules it is
+\fBping\fR(1). The check is skipped for the \fBexec\fR rcmd module,
+which never leaves the local host.
+.TP
+.I "-U file"
+Write the list of excluded hosts to \fIfile\fR, one per line.
+Requires \fI-v\fR.
+.TP
+.I "-W seconds"
+Set the probe timeout in seconds (default 2). Probes run in batches of
+up to the fanout (\fI-f\fR) and each batch shares one timeout.
+Requires \fI-v\fR.
+.TP
+.I "-o port"
+Set the TCP port probed for the \fBssh\fR rcmd module (default 22).
+Requires \fI-v\fR.
+
 .SH "slurm module options"
 The \fBslurm\fI module allows \fBpdsh\fR to target nodes based on 
 currently running SLURM jobs. The \fBslurm\fR module is typically

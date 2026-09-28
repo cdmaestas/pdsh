@@ -198,6 +198,13 @@ AM_CONDITIONAL([WITH_DSHGROUP], [test "$ac_with_dshgroup" = "yes"])
 AC_NETGROUP
 AM_CONDITIONAL([WITH_NETGROUP], [test "$ac_with_netgroup" = "yes"])
 
+#
+# Determine whether to build reachable module
+# (mmdsh-style preflight reachability check)
+#
+AC_REACHABLE
+AM_CONDITIONAL([WITH_REACHABLE], [test "$ac_have_reachable" = "yes"])
+
 dnl
 dnl check for whether to include readline support
 dnl
