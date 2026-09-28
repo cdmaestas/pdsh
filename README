@@ -15,7 +15,10 @@ Pdsh uses GNU autoconf for configuration.  Dynamically loadable
 modules of each shell service (as well as other features) will be
 compiled based on configuration.  By default, the ssh and exec rcmd
 modules are built; the legacy rsh module is never built unless
---with-rsh is given.
+--with-rsh is given.  Modules with an external dependency - such as
+reachable (ping) and nodeclass (IBM Spectrum Scale/GPFS) - are built
+automatically whenever their dependency is found on the build
+system, and skipped otherwise.
 
 The README.modules file distributed with pdsh contains a description
 of each module available, as well as its requirements and/or 
@@ -62,6 +65,13 @@ To configure in additional feature modules:
    
 --with-slurm
 	Support running pdsh under SLURM allocation.
+
+--without-reachable
+	Disable the reachable module (drop unreachable targets with -v).
+
+--without-nodeclass
+	Disable the nodeclass module (target GPFS node classes with -n).
+	Only built where mmlsnodeclass and mmlscluster are found.
 
 --with-fanout=N
 	Specify default fanout (default is 32).
