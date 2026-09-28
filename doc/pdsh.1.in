@@ -267,7 +267,7 @@ nodeattr(1) manpage for examples of genders \fBqueries\fR.
 Exclude nodes that match any of the specified genders attributes
 (optionally with values).  This option may be used in combination with any
 other of the node selection options (e.g. \fI-w\fR, \fI-g\fR, \fI-a\fR,
-...). If the installed version of genders supports it, arguments to
+\&...). If the installed version of genders supports it, arguments to
 \fI-X\fR may also take the form of genders \fBqueries\fR. Please see
 documentation for the genders \fI-g\fR option for more information about
 genders \fBqueries\fR.
