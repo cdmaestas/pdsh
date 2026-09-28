@@ -8,7 +8,9 @@
 #    AC_SSH
 #
 #  DESCRIPTION:
-#    Check if user wants to compile sshcmd 
+#    Check if user wants to compile sshcmd. By default, this module is
+#    included, but may be disabled by passing --without-ssh to the
+#    configure script.
 #
 #  WARNINGS:
 #    This macro must be placed after AC_PROG_CC or equivalent.
@@ -21,7 +23,7 @@ AC_DEFUN([AC_SSH],
   #
   AC_MSG_CHECKING([for whether to build ssh module])
   AC_ARG_WITH([ssh],
-    AS_HELP_STRING([--with-ssh],[Build ssh module]),
+    AS_HELP_STRING([--without-ssh],[Do not include the ssh module]),
     [ case "$withval" in
         no)  ac_with_ssh=no ;;
         yes) ac_with_ssh=yes ;;
@@ -30,7 +32,7 @@ AC_DEFUN([AC_SSH],
       esac
     ]
   )
-  AC_MSG_RESULT([${ac_with_ssh=no}])
+  AC_MSG_RESULT([${ac_with_ssh=yes}])
   
   if test "$ac_with_ssh" = "yes"; then
      ac_have_ssh=yes
